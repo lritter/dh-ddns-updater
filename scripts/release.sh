@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Release script for ddns-updater
+# Release script for dh-ddns-updater
 # Usage: ./scripts/release.sh [version]
 
 VERSION=${1:-}

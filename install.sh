@@ -2,8 +2,8 @@
 set -e
 
 # Get repo from GitHub URL or use default
-REPO="${DDNS_REPO:-lritter/ddns-updater}"  # Set this to your actual repo
-INSTALL_DIR="/tmp/ddns-updater-install"
+REPO="${DDNS_REPO:-lritter/dh-ddns-updater}"  # Set this to your actual repo
+INSTALL_DIR="/tmp/dh-ddns-updater-install"
 ARCH=$(uname -m)
 
 # Colors for pretty output
@@ -41,7 +41,7 @@ case $ARCH in
         ;;
 esac
 
-echo "🔧 Installing ddns-updater for $DEB_ARCH..."
+echo "🔧 Installing dh-ddns-updater for $DEB_ARCH..."
 print_info "Repository: $REPO"
 
 # Check for required tools
@@ -93,13 +93,13 @@ print_info "Download URL: $DOWNLOAD_URL"
 
 # Download package
 print_info "Downloading package..."
-if ! curl -L -o "ddns-updater.deb" "$DOWNLOAD_URL"; then
+if ! curl -L -o "dh-ddns-updater.deb" "$DOWNLOAD_URL"; then
     print_error "Failed to download package"
     exit 1
 fi
 
 # Verify download
-if [ ! -f "ddns-updater.deb" ] || [ ! -s "ddns-updater.deb" ]; then
+if [ ! -f "dh-ddns-updater.deb" ] || [ ! -s "dh-ddns-updater.deb" ]; then
     print_error "Downloaded package is empty or missing"
     exit 1
 fi
@@ -108,7 +108,7 @@ print_status "Package downloaded successfully"
 
 # Install package
 print_info "Installing package..."
-if $SUDO dpkg -i ddns-updater.deb; then
+if $SUDO dpkg -i dh-ddns-updater.deb; then
     print_status "Package installed successfully"
 else
     print_warning "Package installation failed, trying to fix dependencies..."
@@ -122,7 +122,7 @@ cd /
 rm -rf "$INSTALL_DIR"
 
 # Check if service is available
-if systemctl list-unit-files | grep -q ddns-updater.service; then
+if systemctl list-unit-files | grep -q dh-ddns-updater.service; then
     print_status "Service installed and available"
 else
     print_warning "Service may not be properly installed"
@@ -132,12 +132,12 @@ echo ""
 echo "🎉 Installation complete!"
 echo ""
 echo "Next steps:"
-echo "1. Edit configuration: $SUDO nano /etc/ddns-updater/config.yaml"
+echo "1. Edit configuration: $SUDO nano /etc/dh-ddns-updater/config.yaml"
 echo "2. Add your Dreamhost API key and domains"
-echo "3. Start the service: $SUDO systemctl start ddns-updater"
-echo "4. Enable auto-start: $SUDO systemctl enable ddns-updater"
-echo "5. Check status: $SUDO systemctl status ddns-updater"
-echo "6. View logs: $SUDO journalctl -u ddns-updater -f"
+echo "3. Start the service: $SUDO systemctl start dh-ddns-updater"
+echo "4. Enable auto-start: $SUDO systemctl enable dh-ddns-updater"
+echo "5. Check status: $SUDO systemctl status dh-ddns-updater"
+echo "6. View logs: $SUDO journalctl -u dh-ddns-updater -f"
 echo ""
 echo "For help and documentation:"
 echo "https://github.com/$REPO"

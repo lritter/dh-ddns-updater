@@ -90,7 +90,7 @@ jobs:
       run: |
         mkdir -p build
         go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
-          -o build/ddns-updater-${{ matrix.suffix }} .
+          -o build/dh-ddns-updater-${{ matrix.suffix }} .
     
     - name: Create Debian package
       run: |
@@ -101,23 +101,23 @@ jobs:
         DEB_DIR=build/deb-${{ matrix.suffix }}
         mkdir -p $DEB_DIR/DEBIAN
         mkdir -p $DEB_DIR/usr/local/bin
-        mkdir -p $DEB_DIR/etc/ddns-updater
-        mkdir -p $DEB_DIR/var/lib/ddns-updater
+        mkdir -p $DEB_DIR/etc/dh-ddns-updater
+        mkdir -p $DEB_DIR/var/lib/dh-ddns-updater
         mkdir -p $DEB_DIR/etc/systemd/system
         
         # Copy binary
-        cp build/ddns-updater-${{ matrix.suffix }} $DEB_DIR/usr/local/bin/ddns-updater
-        chmod +x $DEB_DIR/usr/local/bin/ddns-updater
+        cp build/dh-ddns-updater-${{ matrix.suffix }} $DEB_DIR/usr/local/bin/dh-ddns-updater
+        chmod +x $DEB_DIR/usr/local/bin/dh-ddns-updater
         
         # Copy config template
-        cp config.yaml $DEB_DIR/etc/ddns-updater/config.yaml.template
+        cp config.yaml $DEB_DIR/etc/dh-ddns-updater/config.yaml.template
         
         # Copy systemd service
-        cp ddns-updater.service $DEB_DIR/etc/systemd/system/
+        cp dh-ddns-updater.service $DEB_DIR/etc/systemd/system/
         
         # Create control file
         cat > $DEB_DIR/DEBIAN/control << EOF
-        Package: ddns-updater
+        Package: dh-ddns-updater
         Version: $DEB_VERSION
         Section: net
         Priority: optional
@@ -134,31 +134,31 @@ jobs:
         set -e
         
         # Create user and group
-        if ! getent group ddns-updater >/dev/null; then
-            groupadd --system ddns-updater
+        if ! getent group dh-ddns-updater >/dev/null; then
+            groupadd --system dh-ddns-updater
         fi
         
-        if ! getent passwd ddns-updater >/dev/null; then
-            useradd --system --gid ddns-updater --home-dir /var/lib/ddns-updater --shell /bin/false ddns-updater
+        if ! getent passwd dh-ddns-updater >/dev/null; then
+            useradd --system --gid dh-ddns-updater --home-dir /var/lib/dh-ddns-updater --shell /bin/false dh-ddns-updater
         fi
         
         # Set permissions
-        chown ddns-updater:ddns-updater /var/lib/ddns-updater
-        chmod 755 /var/lib/ddns-updater
+        chown dh-ddns-updater:dh-ddns-updater /var/lib/dh-ddns-updater
+        chmod 755 /var/lib/dh-ddns-updater
         
         # Copy config if it doesn't exist
-        if [ ! -f /etc/ddns-updater/config.yaml ]; then
-            cp /etc/ddns-updater/config.yaml.template /etc/ddns-updater/config.yaml
-            echo 'Config template copied to /etc/ddns-updater/config.yaml'
+        if [ ! -f /etc/dh-ddns-updater/config.yaml ]; then
+            cp /etc/dh-ddns-updater/config.yaml.template /etc/dh-ddns-updater/config.yaml
+            echo 'Config template copied to /etc/dh-ddns-updater/config.yaml'
             echo 'Please edit it with your API key and domains before starting the service.'
         fi
         
         # Reload systemd and enable service
         systemctl daemon-reload
-        systemctl enable ddns-updater.service
+        systemctl enable dh-ddns-updater.service
         
-        echo 'ddns-updater installed successfully!'
-        echo 'Edit /etc/ddns-updater/config.yaml and then: systemctl start ddns-updater'
+        echo 'dh-ddns-updater installed successfully!'
+        echo 'Edit /etc/dh-ddns-updater/config.yaml and then: systemctl start dh-ddns-updater'
         EOF
         
         chmod +x $DEB_DIR/DEBIAN/postinst
@@ -167,21 +167,21 @@ jobs:
         cat > $DEB_DIR/DEBIAN/prerm << 'EOF'
         #!/bin/bash
         set -e
-        systemctl stop ddns-updater.service || true
-        systemctl disable ddns-updater.service || true
+        systemctl stop dh-ddns-updater.service || true
+        systemctl disable dh-ddns-updater.service || true
         EOF
         
         chmod +x $DEB_DIR/DEBIAN/prerm
         
         # Build package
-        dpkg-deb --build $DEB_DIR build/ddns-updater-$DEB_VERSION-${{ matrix.suffix }}.deb
+        dpkg-deb --build $DEB_DIR build/dh-ddns-updater-$DEB_VERSION-${{ matrix.suffix }}.deb
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: ddns-updater-${{ matrix.suffix }}
+        name: dh-ddns-updater-${{ matrix.suffix }}
         path: |
-          build/ddns-updater-${{ matrix.suffix }}
+          build/dh-ddns-updater-${{ matrix.suffix }}
           build/*.deb
 
   release:
@@ -210,7 +210,7 @@ jobs:
       run: |
         mkdir -p release
         find artifacts -name "*.deb" -exec cp {} release/ \;
-        find artifacts -name "ddns-updater-*" -type f -not -name "*.deb" -exec cp {} release/ \;
+        find artifacts -name "dh-ddns-updater-*" -type f -not -name "*.deb" -exec cp {} release/ \;
         ls -la release/
     
     - name: Generate changelog
@@ -246,4 +246,3 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        

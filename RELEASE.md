@@ -1,6 +1,6 @@
 # Release Process
 
-This document describes how to build and release ddns-updater.
+This document describes how to build and release dh-ddns-updater.
 
 ## Quick Release (Automated)
 
@@ -32,10 +32,10 @@ This will automatically:
 make test
 
 # Build for your current platform
-go build -o ddns-updater .
+go build -o dh-ddns-updater .
 
 # Test locally
-./ddns-updater config.yaml
+./dh-ddns-updater config.yaml
 ```
 
 ### Cross-Platform Build
@@ -75,8 +75,8 @@ The automated release process runs when you push a tag:
    - Watch the "Release" workflow
 
 4. **Release artifacts:**
-   - Binary files: `ddns-updater-arm64`, `ddns-updater-amd64`
-   - Debian packages: `ddns-updater-1.0.0-arm64.deb`, `ddns-updater-1.0.0-amd64.deb`
+   - Binary files: `dh-ddns-updater-arm64`, `dh-ddns-updater-amd64`
+   - Debian packages: `dh-ddns-updater-1.0.0-arm64.deb`, `dh-ddns-updater-1.0.0-amd64.deb`
 
 ## Release Checklist
 
@@ -103,11 +103,11 @@ After a release, test the installation:
 
 ```bash
 # Test the install script
-curl -sSL https://raw.githubusercontent.com/your-username/ddns-updater/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/your-username/dh-ddns-updater/main/install.sh | bash
 
 # Or test manual installation
-wget https://github.com/your-username/ddns-updater/releases/latest/download/ddns-updater-1.0.0-arm64.deb
-sudo dpkg -i ddns-updater-1.0.0-arm64.deb
+wget https://github.com/your-username/dh-ddns-updater/releases/latest/download/dh-ddns-updater-1.0.0-arm64.deb
+sudo dpkg -i dh-ddns-updater-1.0.0-arm64.deb
 ```
 
 ## Troubleshooting Releases
