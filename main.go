@@ -29,11 +29,11 @@ const (
 
 // Config holds the daemon configuration loaded from YAML
 type Config struct {
-	CheckInterval   time.Duration   `yaml:"check_interval"`   // How often to check for IP changes
-	Domains         []DomainConfig  `yaml:"domains"`          // List of domains/records to update
-	DreamhostAPIKey string          `yaml:"dreamhost_api_key"` // API key for Dreamhost
-	StatePath       string          `yaml:"state_path"`       // Where to store persistent state
-	LogLevel        string          `yaml:"log_level"`        // Logging level (debug, info, warn, error)
+	CheckInterval   time.Duration  `yaml:"check_interval"`    // How often to check for IP changes
+	Domains         []DomainConfig `yaml:"domains"`           // List of domains/records to update
+	DreamhostAPIKey string         `yaml:"dreamhost_api_key"` // API key for Dreamhost
+	StatePath       string         `yaml:"state_path"`        // Where to store persistent state
+	LogLevel        string         `yaml:"log_level"`         // Logging level (debug, info, warn, error)
 }
 
 // DomainConfig represents a single DNS record to manage
@@ -194,7 +194,7 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 	if len(updateErrors) == 0 {
 		d.state.LastIP = currentIP
 		d.state.LastUpdated = time.Now()
-		
+
 		if err := d.saveState(); err != nil {
 			d.logger.Error("Failed to save state", "error", err)
 		}
