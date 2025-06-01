@@ -1,0 +1,249 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Run tests
+      run: |
+        go test -v ./...
+        go test -race ./...
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Check formatting
+      run: |
+        if [ "$(gofmt -l .)" ]; then
+          echo "Code not formatted properly"
+          gofmt -l .
+          exit 1
+        fi
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: arm64
+            suffix: arm64
+          - goos: linux
+            goarch: amd64
+            suffix: amd64
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        mkdir -p build
+        go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
+          -o build/ddns-updater-${{ matrix.suffix }} .
+    
+    - name: Create Debian package
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        # Remove 'v' prefix for debian version
+        DEB_VERSION=${VERSION#v}
+        
+        DEB_DIR=build/deb-${{ matrix.suffix }}
+        mkdir -p $DEB_DIR/DEBIAN
+        mkdir -p $DEB_DIR/usr/local/bin
+        mkdir -p $DEB_DIR/etc/ddns-updater
+        mkdir -p $DEB_DIR/var/lib/ddns-updater
+        mkdir -p $DEB_DIR/etc/systemd/system
+        
+        # Copy binary
+        cp build/ddns-updater-${{ matrix.suffix }} $DEB_DIR/usr/local/bin/ddns-updater
+        chmod +x $DEB_DIR/usr/local/bin/ddns-updater
+        
+        # Copy config template
+        cp config.yaml $DEB_DIR/etc/ddns-updater/config.yaml.template
+        
+        # Copy systemd service
+        cp ddns-updater.service $DEB_DIR/etc/systemd/system/
+        
+        # Create control file
+        cat > $DEB_DIR/DEBIAN/control << EOF
+        Package: ddns-updater
+        Version: $DEB_VERSION
+        Section: net
+        Priority: optional
+        Architecture: ${{ matrix.suffix }}
+        Maintainer: ${{ github.repository_owner }} <noreply@github.com>
+        Description: Dynamic DNS updater for Dreamhost
+         A lightweight daemon that automatically updates DNS records
+         when your public IP address changes.
+        EOF
+        
+        # Create postinst script
+        cat > $DEB_DIR/DEBIAN/postinst << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        # Create user and group
+        if ! getent group ddns-updater >/dev/null; then
+            groupadd --system ddns-updater
+        fi
+        
+        if ! getent passwd ddns-updater >/dev/null; then
+            useradd --system --gid ddns-updater --home-dir /var/lib/ddns-updater --shell /bin/false ddns-updater
+        fi
+        
+        # Set permissions
+        chown ddns-updater:ddns-updater /var/lib/ddns-updater
+        chmod 755 /var/lib/ddns-updater
+        
+        # Copy config if it doesn't exist
+        if [ ! -f /etc/ddns-updater/config.yaml ]; then
+            cp /etc/ddns-updater/config.yaml.template /etc/ddns-updater/config.yaml
+            echo 'Config template copied to /etc/ddns-updater/config.yaml'
+            echo 'Please edit it with your API key and domains before starting the service.'
+        fi
+        
+        # Reload systemd and enable service
+        systemctl daemon-reload
+        systemctl enable ddns-updater.service
+        
+        echo 'ddns-updater installed successfully!'
+        echo 'Edit /etc/ddns-updater/config.yaml and then: systemctl start ddns-updater'
+        EOF
+        
+        chmod +x $DEB_DIR/DEBIAN/postinst
+        
+        # Create prerm script
+        cat > $DEB_DIR/DEBIAN/prerm << 'EOF'
+        #!/bin/bash
+        set -e
+        systemctl stop ddns-updater.service || true
+        systemctl disable ddns-updater.service || true
+        EOF
+        
+        chmod +x $DEB_DIR/DEBIAN/prerm
+        
+        # Build package
+        dpkg-deb --build $DEB_DIR build/ddns-updater-$DEB_VERSION-${{ matrix.suffix }}.deb
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ddns-updater-${{ matrix.suffix }}
+        path: |
+          build/ddns-updater-${{ matrix.suffix }}
+          build/*.deb
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+    
+    - name: Prepare release assets
+      run: |
+        mkdir -p release
+        find artifacts -name "*.deb" -exec cp {} release/ \;
+        find artifacts -name "ddns-updater-*" -type f -not -name "*.deb" -exec cp {} release/ \;
+        ls -la release/
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        
+        # Try to get changelog from git tags
+        if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "## What's Changed" > changelog.md
+            git log --pretty=format:"* %s (%h)" $PREV_TAG..HEAD >> changelog.md
+          else
+            echo "## What's Changed" > changelog.md
+            echo "* Initial release" >> changelog.md
+          fi
+        else
+          echo "## What's Changed" > changelog.md
+          echo "* Manual release $VERSION" >> changelog.md
+        fi
+        
+        cat changelog.md
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body_path: changelog.md
+        files: release/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
