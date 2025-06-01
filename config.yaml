@@ -1,0 +1,17 @@
+# DDNS Updater Configuration
+check_interval: 5m
+log_level: info
+state_path: /var/lib/dh-ddns-updater/state.json
+
+# Your Dreamhost API key - get this from your Dreamhost panel
+dreamhost_api_key: "YOUR_API_KEY_HERE"
+
+# DNS records to update
+domains:
+  - name: "example.com"
+    record: "home"      # Creates home.example.com
+    type: "A"
+  - name: "example.com" 
+    record: ""          # Updates example.com directly
+    type: "A"
+  # Add more domains as needed

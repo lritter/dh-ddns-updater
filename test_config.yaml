@@ -1,0 +1,19 @@
+# Test configuration for unit tests
+check_interval: 30s
+log_level: debug
+state_path: /tmp/ddns-test-state.json
+
+# Mock API key for testing
+dreamhost_api_key: "test-api-key-12345"
+
+# Test domains
+domains:
+  - name: "test.local"
+    record: "home"
+    type: "A"
+  - name: "test.local"
+    record: ""
+    type: "A"
+  - name: "another-test.local"
+    record: "server"
+    type: "A"
