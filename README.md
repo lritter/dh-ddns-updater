@@ -15,12 +15,14 @@ A lightweight dynamic DNS updater for Dreamhost that runs as a system daemon. Au
 ## Quick Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/your-username/dh-ddns-updater/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/lritter/dh-ddns-updater/main/install.sh | bash
 ```
+
+NOTE: requires `jq` for JSON parsing and `curl` for HTTP requests.
 
 ## Manual Installation
 
-1. Download the latest `.deb` package from [releases](https://github.com/your-username/dh-ddns-updater/releases)
+1. Download the latest `.deb` package from [releases](https://github.com/lritter/dh-ddns-updater/releases)
 2. Install: `sudo dpkg -i dh-ddns-updater-*.deb`
 
 ## Configuration
@@ -44,8 +46,9 @@ domains:
 ### Getting Your Dreamhost API Key
 
 1. Log into your Dreamhost panel
-2. Go to Advanced → API
-3. Generate a new API key
+2. Go to [Advanced → API](https://panel.dreamhost.com/?tree=home.api)
+3. Generate a new API key with `dns-add_record`, `dns-list_records`,
+   `dns-remove_record` permissions
 4. Copy it to your config file
 
 ## Usage

@@ -5,6 +5,7 @@ This document describes how to build and release dh-ddns-updater.
 ## Quick Release (Automated)
 
 1. **Make sure everything is tested and committed:**
+
    ```bash
    make test
    git add .
@@ -13,11 +14,13 @@ This document describes how to build and release dh-ddns-updater.
    ```
 
 2. **Create a release:**
+
    ```bash
    ./scripts/release.sh v1.0.0
    ```
 
 This will automatically:
+
 - Run tests
 - Build packages locally for verification  
 - Create and push a git tag
@@ -60,21 +63,25 @@ make release-local
 The automated release process runs when you push a tag:
 
 1. **Prerequisites:**
+
    - Repository must be on GitHub
    - GitHub Actions must be enabled
    - No failing tests
 
 2. **Create a release:**
+
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
 
 3. **Monitor the build:**
+
    - Go to your repository's Actions tab
    - Watch the "Release" workflow
 
 4. **Release artifacts:**
+
    - Binary files: `dh-ddns-updater-arm64`, `dh-ddns-updater-amd64`
    - Debian packages: `dh-ddns-updater-1.0.0-arm64.deb`, `dh-ddns-updater-1.0.0-amd64.deb`
 
@@ -103,10 +110,10 @@ After a release, test the installation:
 
 ```bash
 # Test the install script
-curl -sSL https://raw.githubusercontent.com/your-username/dh-ddns-updater/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/lritter/dh-ddns-updater/main/install.sh | bash
 
 # Or test manual installation
-wget https://github.com/your-username/dh-ddns-updater/releases/latest/download/dh-ddns-updater-1.0.0-arm64.deb
+wget https://github.com/lritter/dh-ddns-updater/releases/latest/download/dh-ddns-updater-1.0.0-arm64.deb
 sudo dpkg -i dh-ddns-updater-1.0.0-arm64.deb
 ```
 
@@ -146,6 +153,7 @@ sudo dpkg -i dh-ddns-updater-1.0.0-arm64.deb
 If you need to create a release manually:
 
 1. **Build everything locally:**
+
    ```bash
    make release-local
    ```

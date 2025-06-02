@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -110,10 +111,7 @@ func NewDDNSUpdater(configPath string) (*DDNSUpdater, error) {
 
 	state, err := loadState(config.StatePath)
 	if err != nil {
-		logger.Warn("Failed to load state, starting fresh", "error", err)
-		state = &State{
-			Records: make(map[string]string),
-		}
+		return nil, fmt.Errorf("loading state: %w", err)
 	}
 
 	return &DDNSUpdater{
@@ -175,23 +173,58 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 	d.logger.Info("IP changed", "old", d.state.LastIP, "new", currentIP)
 
 	var updateErrors []error
+	allRecordsUpToDate := true
+
 	for _, domain := range d.config.Domains {
+		recordKey := fmt.Sprintf("%s.%s", domain.Record, domain.Name)
+		if domain.Record == "" {
+			recordKey = domain.Name
+		}
+
+		// Check current DNS record value
+		currentRecordIP, err := d.getCurrentDNSRecord(ctx, domain)
+		if err != nil {
+			d.logger.Warn("Failed to get current DNS record, will update anyway",
+				"domain", domain.Name,
+				"record", domain.Record,
+				"error", err)
+			currentRecordIP = "" // Force update if we can't check
+		}
+
+		// Only update if the record doesn't match the current IP
+		if currentRecordIP == currentIP {
+			d.logger.Debug("DNS record already up to date",
+				"domain", domain.Name,
+				"record", domain.Record,
+				"ip", currentIP)
+			d.state.Records[recordKey] = currentIP
+			continue
+		}
+
+		d.logger.Info("Updating DNS record",
+			"domain", domain.Name,
+			"record", domain.Record,
+			"old_ip", currentRecordIP,
+			"new_ip", currentIP)
+
 		if err := d.updateDNSRecord(ctx, domain, currentIP); err != nil {
 			d.logger.Error("Failed to update DNS record",
 				"domain", domain.Name,
 				"record", domain.Record,
 				"error", err)
 			updateErrors = append(updateErrors, err)
+			allRecordsUpToDate = false
 		} else {
 			d.logger.Info("Successfully updated DNS record",
 				"domain", domain.Name,
 				"record", domain.Record,
 				"ip", currentIP)
-			d.state.Records[fmt.Sprintf("%s.%s", domain.Record, domain.Name)] = currentIP
+			d.state.Records[recordKey] = currentIP
 		}
 	}
 
-	if len(updateErrors) == 0 {
+	// Only update LastIP if all records were processed successfully
+	if allRecordsUpToDate && len(updateErrors) == 0 {
 		d.state.LastIP = currentIP
 		d.state.LastUpdated = time.Now()
 
@@ -207,7 +240,65 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 	return nil
 }
 
-// getCurrentIP fetches the current public IP address from ipinfo.io.
+// getCurrentDNSRecord fetches the current value of a DNS record from Dreamhost.
+// Returns the current IP address for the record, or an empty string if the record
+// doesn't exist or if there's an error fetching it.
+func (d *DDNSUpdater) getCurrentDNSRecord(ctx context.Context, domain DomainConfig) (string, error) {
+	params := url.Values{}
+	params.Set("key", d.config.DreamhostAPIKey)
+	params.Set("cmd", "dns-list_records")
+	params.Set("format", "json")
+
+	apiURL := DreamhostAPIBase + "?" + params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d from Dreamhost API", resp.StatusCode)
+	}
+
+	var dhResp struct {
+		Result string `json:"result"`
+		Data   []struct {
+			Record string `json:"record"`
+			Type   string `json:"type"`
+			Value  string `json:"value"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&dhResp); err != nil {
+		return "", fmt.Errorf("decoding response: %w", err)
+	}
+
+	if dhResp.Result != "success" {
+		return "", fmt.Errorf("dreamhost API error")
+	}
+
+	// Find the matching record
+	targetRecord := domain.Name
+	if domain.Record != "" {
+		targetRecord = fmt.Sprintf("%s.%s", domain.Record, domain.Name)
+	}
+
+	for _, record := range dhResp.Data {
+		if record.Record == targetRecord && record.Type == domain.Type {
+			return record.Value, nil
+		}
+	}
+
+	// Record not found
+	return "", nil
+}
+
 // Returns the IP as a string, or an error if the request fails or
 // returns an unexpected response.
 func (d *DDNSUpdater) getCurrentIP(ctx context.Context) (string, error) {
@@ -288,7 +379,7 @@ func (d *DDNSUpdater) updateDNSRecord(ctx context.Context, domain DomainConfig, 
 	}
 
 	if dhResp.Result != "success" {
-		return fmt.Errorf("Dreamhost API error: %s", dhResp.Data)
+		return fmt.Errorf("dreamhost API error: %s", dhResp.Data)
 	}
 
 	return nil
@@ -367,19 +458,49 @@ func loadConfig(path string) (*Config, error) {
 }
 
 // loadState reads and parses the JSON state file.
-// Returns a State struct or an error if the file cannot be read or parsed.
-// If the state file doesn't exist, this is not considered an error.
+// If the state file doesn't exist, creates a new one with default values.
+// Creates the directory structure if it doesn't exist.
+// Returns a State struct or an error if file operations fail.
 func loadState(path string) (*State, error) {
+	// Try to read existing state file
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		// If file doesn't exist, create it with default state
+		if os.IsNotExist(err) {
+			// Create directory structure if it doesn't exist
+			dir := filepath.Dir(path)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return nil, fmt.Errorf("creating state directory: %w", err)
+			}
+
+			// Create default state
+			defaultState := &State{
+				Records: make(map[string]string),
+			}
+
+			// Write default state to file
+			data, err := json.MarshalIndent(defaultState, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("marshaling default state: %w", err)
+			}
+
+			if err := os.WriteFile(path, data, 0644); err != nil {
+				return nil, fmt.Errorf("creating state file: %w", err)
+			}
+
+			return defaultState, nil
+		}
+		// Return other read errors as-is
+		return nil, fmt.Errorf("reading state file: %w", err)
 	}
 
+	// Parse existing state file
 	var state State
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing state file: %w", err)
 	}
 
+	// Ensure Records map is initialized
 	if state.Records == nil {
 		state.Records = make(map[string]string)
 	}
