@@ -70,6 +70,12 @@ sudo journalctl -u dh-ddns-updater -f
 sudo -u dh-ddns-updater /usr/local/bin/dh-ddns-updater /etc/dh-ddns-updater/config.yaml
 ```
 
+Note that you must restart the service after changing the configuration:
+
+```bash
+sudo systemctl restart dh-ddns-updater
+```
+
 ## Building from Source
 
 ```bash

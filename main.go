@@ -165,15 +165,13 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 
 	d.logger.Debug("Current IP", "ip", currentIP)
 
-	if currentIP == d.state.LastIP {
-		d.logger.Debug("IP unchanged, skipping update")
-		return nil
+	// Log IP change if it occurred, but don't exit early
+	if currentIP != d.state.LastIP {
+		d.logger.Info("IP changed", "old", d.state.LastIP, "new", currentIP)
 	}
 
-	d.logger.Info("IP changed", "old", d.state.LastIP, "new", currentIP)
-
 	var updateErrors []error
-	allRecordsUpToDate := true
+	updatedAnyRecord := false
 
 	for _, domain := range d.config.Domains {
 		recordKey := fmt.Sprintf("%s.%s", domain.Record, domain.Name)
@@ -181,7 +179,7 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 			recordKey = domain.Name
 		}
 
-		// Check current DNS record value
+		// Always check current DNS record value
 		currentRecordIP, err := d.getCurrentDNSRecord(ctx, domain)
 		if err != nil {
 			d.logger.Warn("Failed to get current DNS record, will update anyway",
@@ -191,7 +189,7 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 			currentRecordIP = "" // Force update if we can't check
 		}
 
-		// Only update if the record doesn't match the current IP
+		// If the record already has the correct IP, just move on.
 		if currentRecordIP == currentIP {
 			d.logger.Debug("DNS record already up to date",
 				"domain", domain.Name,
@@ -213,20 +211,22 @@ func (d *DDNSUpdater) checkAndUpdate(ctx context.Context) error {
 				"record", domain.Record,
 				"error", err)
 			updateErrors = append(updateErrors, err)
-			allRecordsUpToDate = false
 		} else {
 			d.logger.Info("Successfully updated DNS record",
 				"domain", domain.Name,
 				"record", domain.Record,
 				"ip", currentIP)
 			d.state.Records[recordKey] = currentIP
+			updatedAnyRecord = true
 		}
 	}
 
-	// Only update LastIP if all records were processed successfully
-	if allRecordsUpToDate && len(updateErrors) == 0 {
+	// Update state if we successfully processed everything
+	if len(updateErrors) == 0 {
 		d.state.LastIP = currentIP
-		d.state.LastUpdated = time.Now()
+		if updatedAnyRecord {
+			d.state.LastUpdated = time.Now()
+		}
 
 		if err := d.saveState(); err != nil {
 			d.logger.Error("Failed to save state", "error", err)
